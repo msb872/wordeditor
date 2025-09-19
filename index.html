@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ویرایشگر حرفه‌ای متن و تصاویر</title>
+<style>
+body{font-family: IranSans, Tahoma, Arial; margin:0; background:#f7f7f7;}
+header{display:flex; align-items:center; padding:10px; background:#fff; border-bottom:1px solid #ddd; position:sticky; top:0; z-index:1000;}
+.toolbar{display:flex; flex-wrap:wrap; gap:8px; margin:12px;}
+#editor{min-height:400px; padding:12px; background:#fff; border-radius:6px; border:1px solid #ddd; overflow:auto;}
+#imageList{width:220px; min-height:400px; border:1px solid #ddd; padding:6px; background:#fff; border-radius:6px; overflow:auto;}
+.imageItem{border:1px solid #ccc; padding:4px; border-radius:4px; text-align:center; margin-bottom:8px;}
+.imageItem img{max-width:100%; height:auto; display:block; margin-bottom:4px; cursor:pointer;}
+.sizeInput{width:60px; margin:2px;}
+.controls{display:flex; gap:8px; flex-wrap:wrap; margin:12px;}
+.btn{padding:6px 12px; border-radius:6px; border:1px solid #ccc; background:white; cursor:pointer;}
+.btn[disabled]{opacity:.5; cursor:not-allowed;}
+.small{font-size:13px; color:#555;}
+.flexContainer{display:flex; gap:12px; margin:12px;}
+</style>
+</head>
+<body>
+<header>
+<div style="flex:1">
+<h2 style="margin:0">ویرایشگر حرفه‌ای متن و تصاویر</h2>
+<div class="small">قابل اجرا در مرورگر — بدون نیاز به سرور</div>
+</div>
+<input id="fileinput" type="file" class="btn" />
+</header>
+
+<div class="toolbar">
+<select id="fontSelect">
+<option value="Tahoma">Tahoma</option>
+<option value="Arial">Arial</option>
+<option value="Times New Roman">Times New Roman</option>
+<option value="Courier New">Courier New</option>
+<option value="IranSans">IranSans</option>
+<option value="Verdana">Verdana</option>
+<option value="Georgia">Georgia</option>
+<option value="Impact">Impact</option>
+</select>
+<input type="number" id="fontSizeInput" value="14" style="width:60px;"> px
+<input type="color" id="fontColorInput" value="#000000">
+<button id="boldBtn" class="btn">B</button>
+<button id="italicBtn" class="btn">I</button>
+<button id="underlineBtn" class="btn">U</button>
+<button id="leftAlignBtn" class="btn">چپ</button>
+<button id="centerAlignBtn" class="btn">وسط</button>
+<button id="rightAlignBtn" class="btn">راست</button>
+<button id="applyFontSizeBtn" class="btn">اعمال اندازه</button>
+</div>
+
+<div class="controls">
+<button id="saveDocx" class="btn">ذخیره DOCX</button>
+<button id="saveHtml" class="btn">ذخیره HTML</button>
+<button id="saveTxt" class="btn">ذخیره TXT</button>
+<button id="saveXlsx" class="btn">ذخیره XLSX</button>
+<button id="clear" class="btn">پاک کردن</button>
+</div>
+
+<div class="flexContainer">
+<div id="imageList"></div>
+<div style="flex:1">
+<div id="editor" contenteditable="true">متن خود را وارد کنید یا فایل بارگذاری کنید.</div>
+</div>
+</div>
+<div id="status" class="small">در حال آماده‌سازی...</div>
+
+<script src="https://unpkg.com/mammoth/mammoth.browser.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+<script src="html-docx.js"></script>
+<script>
+const editor=document.getElementById('editor');
+const fontSelect=document.getElementById('fontSelect');
+const fontSizeInput=document.getElementById('fontSizeInput');
+const fontColorInput=document.getElementById('fontColorInput');
+const applyFontSizeBtn=document.getElementById('applyFontSizeBtn');
+const boldBtn=document.getElementById('boldBtn');
+const italicBtn=document.getElementById('italicBtn');
+const underlineBtn=document.getElementById('underlineBtn');
+const leftAlignBtn=document.getElementById('leftAlignBtn');
+const centerAlignBtn=document.getElementById('centerAlignBtn');
+const rightAlignBtn=document.getElementById('rightAlignBtn');
+const imageList=document.getElementById('imageList');
+let currentFileName='untitled';
+
+// اعمال تغییرات متن
+fontColorInput.addEventListener('input',()=>document.execCommand('foreColor',false,fontColorInput.value));
+fontSelect.addEventListener('change',()=>document.execCommand('fontName',false,fontSelect.value));
+boldBtn.onclick=()=>document.execCommand('bold');
+italicBtn.onclick=()=>document.execCommand('italic');
+underlineBtn.onclick=()=>document.execCommand('underline');
+leftAlignBtn.onclick=()=>document.execCommand('justifyLeft');
+centerAlignBtn.onclick=()=>document.execCommand('justifyCenter');
+rightAlignBtn.onclick=()=>document.execCommand('justifyRight');
+applyFontSizeBtn.onclick=()=>{
+document.execCommand('fontSize',false,'7');
+const fonts=editor.querySelectorAll("font[size='7']");
+fonts.forEach(el=>{
+const span=document.createElement('span');
+span.style.fontSize=fontSizeInput.value+'px';
+span.style.fontFamily=fontSelect.value;
+span.innerHTML=el.innerHTML;
+el.replaceWith(span);
+});
+};
+
+// مدیریت تصاویر
+function updateImages(){
+imageList.innerHTML='';
+const imgs=editor.querySelectorAll('img');
+imgs.forEach((img,i)=>{
+const div=document.createElement('div'); div.className='imageItem';
+const w=img.width||img.naturalWidth;
+const h=img.height||img.naturalHeight;
+div.innerHTML=`<img src="${img.src}" data-index="${i}"><div class="small">W:<input class="sizeInput" type="number" value="${w}"> H:<input class="sizeInput" type="number" value="${h}"></div><button class="btn saveImgBtn">ذخیره</button>`;
+imageList.appendChild(div);
+const inputs=div.querySelectorAll('.sizeInput');
+inputs[0].addEventListener('input',()=>{img.width=parseInt(inputs[0].value);});
+inputs[1].addEventListener('input',()=>{img.height=parseInt(inputs[1].value);});
+div.querySelector('.saveImgBtn').onclick=()=>{fetch(img.src).then(r=>r.blob()).then(b=>{const a=document.createElement('a'); a.href=URL.createObjectURL(b); a.download='image'+i+'.png'; document.body.appendChild(a); a.click(); a.remove();});}
+});
+}
+editor.addEventListener('input',updateImages);
+
+// ذخیره فایل‌ها
+function saveFile(blob, filename){const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=filename; document.body.appendChild(a); a.click(); a.remove();}
+document.getElementById('saveHtml').onclick=()=>{const html='<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><style>body{direction:rtl;font-family:'+fontSelect.value+';font-size:'+fontSizeInput.value+'px;}</style></head><body>'+editor.innerHTML+'</body></html>'; saveFile(new Blob([html],{type:'text/html;charset=utf-8'}),currentFileName+'.html');};
+document.getElementById('saveTxt').onclick=()=>{saveFile(new Blob([editor.innerText||''],{type:'text/plain;charset=utf-8'}),currentFileName+'.txt');};
+document.getElementById('saveDocx').onclick=()=>{const content='<!DOCTYPE html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><style>body{direction:rtl;font-family:'+fontSelect.value+';font-size:'+fontSizeInput.value+'px;}</style></head><body>'+editor.innerHTML+'</body></html>'; saveFile(window.htmlDocx.asBlob(content),currentFileName+'.docx');};
+document.getElementById('saveXlsx').onclick=()=>{
+const table=editor.querySelector('table'); let wb=XLSX.utils.book_new();
+if(table){const ws=XLSX.utils.table_to_sheet(table); XLSX.utils.book_append_sheet(wb,ws,'Sheet1');}
+else{const text=editor.innerText||''; const rows=text.split(/\n/).map(r=>r.split(/\t|,/)); const ws=XLSX.utils.aoa_to_sheet(rows); XLSX.utils.book_append_sheet(wb,ws,'Sheet1');}
+const wbout=XLSX.write(wb,{bookType:'xlsx',type:'array'}); saveFile(new Blob([wbout],{type:'application/octet-stream'}),currentFileName+'.xlsx');};
+document.getElementById('clear').onclick=()=>{editor.innerHTML=''; currentFileName='untitled'; updateImages();};
+
+// بارگذاری فایل
+document.getElementById('fileinput').addEventListener('change', async(ev)=>{
+const f=ev.target.files[0]; if(!f) return; currentFileName=f.name.split('.').slice(0,-1).join('.')||'untitled';
+const ext=f.name.split('.').pop().toLowerCase();
+try{
+if(ext==='txt'||ext==='md'){const text=await f.text(); editor.textContent=text;}
+else if(ext==='html'){const html=await f.text(); editor.innerHTML=html;}
+else if(ext==='docx'){const arrayBuffer=await f.arrayBuffer(); if(typeof mammoth!=='undefined'){const r=await mammoth.convertToHtml({arrayBuffer}); editor.innerHTML=r.value||'';}}
+else if(ext==='xlsx'||ext==='xls'){const arrayBuffer=await f.arrayBuffer(); const data=new Uint8Array(arrayBuffer); const workbook=XLSX.read(data,{type:'array'}); const html=XLSX.utils.sheet_to_html(workbook.Sheets[workbook.SheetNames[0]],{id:'sheet-table'}); editor.innerHTML=html;}
+else{alert('فرمت پشتیبانی‌نشده: '+ext);}
+updateImages();
+}catch(e){alert('خطا در بارگذاری فایل: '+e.message);}
+});
+
+status.textContent='ویرایشگر حرفه‌ای آماده است.';
+updateImages();
+</script>
+</body>
+</html>
